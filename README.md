@@ -1,6 +1,6 @@
-# RegressGuard
+# Version Fault
 
-**RegressGuard** is an IDE extension that automatically finds, explains, and fixes software regressions — bugs that appear when a previously working release stops working after a new change.
+**Version Fault** is an IDE extension that automatically finds, explains, and fixes software regressions — bugs that appear when a previously working release stops working after a new change.
 
 It combines Git history analysis, automated test evidence, and IBM Bob's AI investigation and repair capabilities into a single "Investigate Regression" workflow you can run without ever leaving your editor.
 
@@ -19,13 +19,13 @@ Finding a regression today usually means manually:
 - Reasoning about the root cause by hand
 - Writing and verifying a fix
 
-This is slow, repetitive, and easy to get wrong — especially under time pressure, in unfamiliar codebases, or during a hackathon/on-call scenario. RegressGuard automates this investigative process end-to-end.
+This is slow, repetitive, and easy to get wrong — especially under time pressure, in unfamiliar codebases, or during a hackathon/on-call scenario. Version Fault automates this investigative process end-to-end.
 
 ---
 
-## What RegressGuard Does
+## What Version Fault Does
 
-Given a **working release** (e.g. `v1.0`) and a **broken release** (e.g. `v2.0`), RegressGuard:
+Given a **working release** (e.g. `v1.0`) and a **broken release** (e.g. `v2.0`), Version Fault:
 
 1. Collects **Git evidence** — the commits, changed files, and diffs between the two versions.
 2. Collects **test evidence** — runs `pytest` and captures exactly which test(s) fail and how.
@@ -37,13 +37,13 @@ Given a **working release** (e.g. `v1.0`) and a **broken release** (e.g. `v2.0`)
    - Applies the fix (via Bob Agent mode)
 5. Re-runs the test suite to **verify** the fix actually resolves the regression.
 
-If tests pass afterward, RegressGuard reports: **"Regression Fixed."**
+If tests pass afterward, Version Fault reports: **"Regression Fixed."**
 
 ---
 
 ## How It Works (Architecture)
 
-RegressGuard is intentionally a **thin IDE shell around a Python engine**, with IBM Bob doing the actual reasoning and repair work.
+Version Fault is intentionally a **thin IDE shell around a Python engine**, with IBM Bob doing the actual reasoning and repair work.
 
 ```
 IDE Extension (TypeScript)
@@ -84,17 +84,17 @@ There is intentionally **no database, no cloud backend, and no custom ML model**
 ## End-to-End Workflow
 
 1. Developer opens a Python repository in IBM Bob.
-2. Developer opens the RegressGuard extension panel.
+2. Developer opens the Version Fault extension panel.
 3. They select the last **working** release (e.g. `v1.0`) and the **broken** release (e.g. `v2.0`).
 4. They click **Investigate Regression**.
-5. RegressGuard runs the Python Git Analyzer to collect commits, changed files, and diffs.
-6. RegressGuard runs the Python Test Analyzer to execute `pytest` and capture the failing test.
-7. RegressGuard generates `reports/regression_context.md`, combining both sets of evidence.
+5. Version Fault runs the Python Git Analyzer to collect commits, changed files, and diffs.
+6. Version Fault runs the Python Test Analyzer to execute `pytest` and capture the failing test.
+7. Version Fault generates `reports/regression_context.md`, combining both sets of evidence.
 8. IBM Bob reads the report along with the source code, tests, and Git history.
 9. Bob identifies the most likely bad commit/function and explains its reasoning.
 10. Bob creates a minimal, safe fix plan.
 11. Bob (Agent mode) applies the fix.
-12. RegressGuard/Bob re-runs `pytest`.
+12. Version Fault/Bob re-runs `pytest`.
 13. If all tests pass, the extension shows **"Regression Fixed."**
 
 ---
@@ -113,7 +113,7 @@ There is intentionally **no database, no cloud backend, and no custom ML model**
 
 ## What This Is Not (Scope)
 
-To stay realistic and demoable, RegressGuard deliberately does **not** attempt to be:
+To stay realistic and demoable, Version Fault deliberately does **not** attempt to be:
 
 - A full CI/CD platform or replacement
 - A general-purpose AI coding assistant
@@ -132,7 +132,7 @@ The goal is a focused, reliable, end-to-end demo of one thing: **turning a regre
 ## Project Structure
 
 ```
-regressguard/
+version-fault/
 ├── extension/
 │   ├── src/
 │   │   ├── extension.ts
@@ -154,4 +154,4 @@ regressguard/
 
 ## Why This Matters
 
-Regression triage is one of the most common, time-consuming, and cognitively tiring parts of software development — especially when a change set is large or the codebase is unfamiliar. By automating evidence collection (Git + tests) and pairing it with AI-driven root-cause investigation and repair, RegressGuard turns a process that can take hours of manual digging into a single click and a few minutes of automated investigation — with a verified, tested fix at the end, not just a guess.
+Regression triage is one of the most common, time-consuming, and cognitively tiring parts of software development — especially when a change set is large or the codebase is unfamiliar. By automating evidence collection (Git + tests) and pairing it with AI-driven root-cause investigation and repair, Version Fault turns a process that can take hours of manual digging into a single click and a few minutes of automated investigation — with a verified, tested fix at the end, not just a guess.
