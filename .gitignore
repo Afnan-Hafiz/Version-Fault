@@ -1,3 +1,4 @@
+.venv/
 # Python
 .venv/
 venv/
@@ -15,3 +16,5 @@ node_modules/
 
 # OS
 .DS_Store
+G:\Version-Fault\extension\versionfault\.vscode-test
+extension/versionfault/.vscode-test/
