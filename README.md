@@ -263,8 +263,6 @@ Regression triage is among the most common and cognitively expensive tasks in so
 ## Screenshots
 
 
-![Investigate Regression result](screenshots/investigate_regression_result.webp)
-
 The panel shows the commit and file suspected of causing the regression, the failing test with its assertion error, and offers a **Fix The Issue** action.
 
 **After Bob applies the fix — verified:**
