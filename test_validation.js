@@ -24,30 +24,38 @@ refsToTest.forEach(({ ref, shouldExist }) => {
   console.log(`[${passed ? 'PASS' : 'FAIL'}] Ref "${ref}": exists=${exists} (expected=${shouldExist})`);
 });
 
-console.log('\n=== TEST 3: Analyzer Execution with Arbitrary SHAs ===');
+console.log('\n=== TEST 3: Analyzer Execution with BUGS (8a39af0 -> 8deb5db) ===');
 const scriptPath = path.join(workspaceRoot, 'analyzer', 'report_generator.py');
-const working = '8a39af0';
-const broken = '8deb5db';
 
-const py = spawnSync('python', [scriptPath, working, broken, '--workspace', workspaceRoot], {
+const pyWithBug = spawnSync('python', [scriptPath, '8a39af0', '8deb5db', '--workspace', workspaceRoot], {
   cwd: workspaceRoot,
   encoding: 'utf-8',
 });
 
-console.log(`Python exit code: ${py.status}`);
-if (py.status === 0) {
-  try {
-    const report = JSON.parse(py.stdout);
-    console.log('[PASS] JSON parsed successfully.');
-    console.log(`- Working release:  ${report.working_release}`);
-    console.log(`- Broken release:   ${report.broken_release}`);
-    console.log(`- Suspected commit: ${report.suspected_commit}`);
-    console.log(`- Suspected file:   ${report.suspected_file}`);
-    console.log(`- Commits analyzed: ${report.commits_analyzed.length}`);
-    console.log(`- Failing tests:    ${report.failing_tests.length}`);
-  } catch (err) {
-    console.error('[FAIL] Could not parse JSON output:', err.message);
-  }
+console.log(`Python exit code: ${pyWithBug.status}`);
+if (pyWithBug.status === 0) {
+  const report = JSON.parse(pyWithBug.stdout);
+  console.log(`[PASS] Bug detected as expected:`);
+  console.log(`- Failing tests:    ${report.failing_tests.length} (expected > 0)`);
+  console.log(`- Suspected commit: ${report.suspected_commit}`);
+  console.log(`- Has bug:          ${report.has_bug}`);
 } else {
-  console.error('[FAIL] Python script failed:', py.stderr);
+  console.error('[FAIL] Python script failed:', pyWithBug.stderr);
+}
+
+console.log('\n=== TEST 4: Analyzer Execution with NO BUGS (0879cfa -> 8a39af0) ===');
+const pyNoBug = spawnSync('python', [scriptPath, '0879cfa', '8a39af0', '--workspace', workspaceRoot], {
+  cwd: workspaceRoot,
+  encoding: 'utf-8',
+});
+
+console.log(`Python exit code: ${pyNoBug.status}`);
+if (pyNoBug.status === 0) {
+  const report = JSON.parse(pyNoBug.stdout);
+  console.log(`[PASS] Clean release detected as expected:`);
+  console.log(`- Failing tests:    ${report.failing_tests.length} (expected 0)`);
+  console.log(`- Suspected commit: ${report.suspected_commit}`);
+  console.log(`- Has bug:          ${report.has_bug}`);
+} else {
+  console.error('[FAIL] Python script failed:', pyNoBug.stderr);
 }

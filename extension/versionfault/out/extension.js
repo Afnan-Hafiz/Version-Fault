@@ -41,7 +41,11 @@ let outputChannel;
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('Version Fault');
     context.subscriptions.push(outputChannel);
-    const disposable = vscode.commands.registerCommand('versionFault.investigateRegression', () => panel_1.RegressionPanel.createOrShow(context.extensionUri, outputChannel));
+    const disposable = vscode.commands.registerCommand('versionFault.investigateRegression', () => {
+        outputChannel?.show(true);
+        outputChannel?.appendLine(`[${new Date().toISOString()}] Command 'versionFault.investigateRegression' executed.`);
+        panel_1.RegressionPanel.createOrShow(context.extensionUri, outputChannel);
+    });
     context.subscriptions.push(disposable);
 }
 function deactivate() { }
