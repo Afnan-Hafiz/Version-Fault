@@ -84,7 +84,6 @@ export class RegressionPanel {
 		proc.on('close', (code) => onDone(code, stdout, stderr));
 
 		proc.on('error', (err: Error) => {
-			// Treat a spawn error as a non-zero exit with a meaningful message.
 			onDone(-1, '', `Failed to start Python: ${err.message}`);
 		});
 	}
@@ -97,7 +96,16 @@ export class RegressionPanel {
 
 		this._spawnPython(scriptPath, [working, broken], workspaceRoot, (code, stdout, stderr) => {
 			if (code === 0) {
-				this._panel.webview.postMessage({ type: 'result', output: stdout });
+				try {
+					const report = JSON.parse(stdout);
+					this._panel.webview.postMessage({ type: 'result', report });
+				} catch {
+					// JSON parse failed — show raw output as error
+					this._panel.webview.postMessage({
+						type: 'error',
+						output: `Script produced invalid JSON:\n${stdout}\n${stderr}`.trim()
+					});
+				}
 			} else {
 				const errMsg = stderr.trim() || `Process exited with code ${code}.`;
 				this._panel.webview.postMessage({ type: 'error', output: errMsg });
@@ -112,10 +120,15 @@ export class RegressionPanel {
 		this._panel.webview.postMessage({ type: 'fixLoading' });
 
 		this._spawnPython(scriptPath, [working, broken, culprit, file], workspaceRoot, (code, stdout, stderr) => {
-			if (code === 0) {
-				this._panel.webview.postMessage({ type: 'fixResult', output: stdout });
-			} else {
-				const errMsg = stderr.trim() || `Process exited with code ${code}.`;
+			try {
+				const fixResult = JSON.parse(stdout);
+				if (fixResult.status === 'fixed') {
+					this._panel.webview.postMessage({ type: 'fixResult', fixResult });
+				} else {
+					this._panel.webview.postMessage({ type: 'fixError', output: fixResult.error || 'Fix failed.' });
+				}
+			} catch {
+				const errMsg = stderr.trim() || stdout.trim() || `Process exited with code ${code}.`;
 				this._panel.webview.postMessage({ type: 'fixError', output: errMsg });
 			}
 		});
@@ -145,10 +158,10 @@ function getWebviewContent(): string {
     color: var(--vscode-foreground);
     background: var(--vscode-editor-background);
     padding: 20px;
-    max-width: 640px;
+    max-width: 700px;
   }
   h2 { margin-top: 0; }
-  h3 { margin: 18px 0 6px; }
+  h3 { margin: 18px 0 6px; font-size: 1em; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
   label { display: block; margin-bottom: 4px; font-weight: bold; }
   input[type="text"] {
     width: 100%;
@@ -178,6 +191,45 @@ function getWebviewContent(): string {
     color: var(--vscode-descriptionForeground);
     min-height: 18px;
   }
+  /* Report cards */
+  .report-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .card {
+    padding: 10px 12px;
+    background: var(--vscode-textCodeBlock-background, #1e1e1e);
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 2px;
+  }
+  .card.full-width { grid-column: 1 / -1; }
+  .card-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.6;
+    margin-bottom: 6px;
+  }
+  .card-value {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: var(--vscode-editor-font-size, 12px);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-right: 4px;
+    margin-bottom: 3px;
+  }
+  .badge-red   { background: #5a1c1c; color: #f48771; }
+  .badge-green { background: #1c3a1c; color: #89d185; }
+  .badge-blue  { background: #1c2e4a; color: #6aafdd; }
   .output-block {
     margin-top: 14px;
     padding: 10px;
@@ -187,11 +239,11 @@ function getWebviewContent(): string {
     background: var(--vscode-textCodeBlock-background, #1e1e1e);
     border: 1px solid var(--vscode-input-border, #555);
     border-radius: 2px;
-    min-height: 80px;
+    min-height: 40px;
     color: var(--vscode-foreground);
   }
   .output-block.error { color: var(--vscode-errorForeground, #f48771); }
-  /* Fix section — hidden until a report is ready */
+  /* Fix section */
   #fixSection { display: none; margin-top: 20px; }
   /* Success banner */
   #successBanner {
@@ -204,11 +256,30 @@ function getWebviewContent(): string {
     font-size: 1.05em;
     border-radius: 2px;
   }
-  /* Separator between the two main sections */
   .section-divider {
     margin: 22px 0 18px;
     border: none;
     border-top: 1px solid var(--vscode-input-border, #444);
+  }
+  /* Fix changes */
+  .fix-change-row {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: var(--vscode-editor-font-size, 12px);
+    margin-bottom: 6px;
+  }
+  .fix-change-row .file-name { color: var(--vscode-textLink-foreground, #6aafdd); }
+  .fix-change-row .lines     { opacity: 0.7; margin: 0 6px; }
+  .fix-pytest {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--vscode-textCodeBlock-background, #1e1e1e);
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 2px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: var(--vscode-editor-font-size, 11px);
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
   }
 </style>
 </head>
@@ -216,14 +287,14 @@ function getWebviewContent(): string {
 <h2>Version Fault — Investigate Regression</h2>
 
 <label for="working">Working release</label>
-<input type="text" id="working" placeholder="e.g. v1.0" />
+<input type="text" id="working" placeholder="e.g. v1.0 or commit SHA" />
 
 <label for="broken">Broken release</label>
-<input type="text" id="broken" placeholder="e.g. v2.0" />
+<input type="text" id="broken" placeholder="e.g. v2.0 or commit SHA" />
 
 <button id="runBtn" onclick="runInvestigation()">Investigate Regression</button>
 <div class="status" id="status"></div>
-<div class="output-block" id="output"></div>
+<div id="reportArea"></div>
 
 <!-- Fix section: revealed after a successful investigation -->
 <div id="fixSection">
@@ -233,39 +304,40 @@ function getWebviewContent(): string {
   <div id="successBanner">&#10003; ALL ISSUES ARE FIXED NOW!</div>
   <div id="fixSection-changes" style="display:none">
     <h3>Changes Applied</h3>
-    <div class="output-block" id="fixOutput"></div>
+    <div id="fixChanges"></div>
+    <h3>Pytest Confirmation</h3>
+    <div class="fix-pytest" id="fixPytest"></div>
   </div>
 </div>
 
 <script>
   const vscode = acquireVsCodeApi();
 
-  // Parsed from the last successful investigation report.
   let lastWorking  = '';
   let lastBroken   = '';
   let lastCulprit  = '';
   let lastFile     = '';
 
-  // ── Investigate ────────────────────────────────────────────────────────────
+  // ── Investigate ─────────────────────────────────────────────────────────────
 
   function runInvestigation() {
     const working = document.getElementById('working').value.trim();
     const broken  = document.getElementById('broken').value.trim();
 
     if (!working || !broken) {
-      setStatus('Please enter both release values.', false);
+      setStatus('Please enter both release values.', true);
       return;
     }
 
     document.getElementById('runBtn').disabled = true;
     setStatus('Running analysis\u2026', false);
-    setOutput('', false);
+    document.getElementById('reportArea').innerHTML = '';
     hideFixSection();
 
     vscode.postMessage({ command: 'investigate', working, broken });
   }
 
-  // ── Fix ────────────────────────────────────────────────────────────────────
+  // ── Fix ─────────────────────────────────────────────────────────────────────
 
   function runFix() {
     document.getElementById('fixBtn').disabled = true;
@@ -283,39 +355,42 @@ function getWebviewContent(): string {
     });
   }
 
-  // ── Message handler ────────────────────────────────────────────────────────
+  // ── Message handler ─────────────────────────────────────────────────────────
 
   window.addEventListener('message', event => {
     const msg = event.data;
 
-    // -- Investigation messages --
     if (msg.type === 'loading') {
       setStatus('Running analysis\u2026', false);
-      setOutput('', false);
+      document.getElementById('reportArea').innerHTML = '';
 
     } else if (msg.type === 'result') {
       document.getElementById('runBtn').disabled = false;
-      setStatus('Done.', false);
-      setOutput(msg.output, false);
-      // Parse culprit info and reveal the Fix button.
-      parseReport(msg.output);
+      setStatus('Analysis complete.', false);
+      renderReport(msg.report);
+      lastWorking = msg.report.working_release;
+      lastBroken  = msg.report.broken_release;
+      lastCulprit = msg.report.suspected_commit;
+      lastFile    = msg.report.suspected_file;
       showFixSection();
 
     } else if (msg.type === 'error') {
       document.getElementById('runBtn').disabled = false;
-      setStatus('Error.', false);
-      setOutput(msg.output, true);
+      setStatus('Error.', true);
+      const el = document.createElement('div');
+      el.className = 'output-block error';
+      el.textContent = msg.output;
+      document.getElementById('reportArea').appendChild(el);
       hideFixSection();
 
-    // -- Fix messages --
     } else if (msg.type === 'fixLoading') {
-      // button already disabled in runFix()
+      // button already disabled
 
     } else if (msg.type === 'fixResult') {
       resetFixButton();
       setFixStatus('', false);
       document.getElementById('successBanner').style.display = 'block';
-      document.getElementById('fixOutput').textContent = msg.output;
+      renderFixChanges(msg.fixResult);
       document.getElementById('fixSection-changes').style.display = 'block';
 
     } else if (msg.type === 'fixError') {
@@ -325,19 +400,109 @@ function getWebviewContent(): string {
     }
   });
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Render helpers ───────────────────────────────────────────────────────────
 
-  function parseReport(text) {
-    // Extract the working/broken releases echoed in the report.
-    const workingMatch = text.match(/Working release\s*:\s*(.+)/i);
-    const brokenMatch  = text.match(/Broken release\s*:\s*(.+)/i);
-    const culpritMatch = text.match(/Suspected culprit commit:\s*(.+)/i);
-    const fileMatch    = text.match(/Introduced in\s*:\s*(.+)/i);
+  function renderReport(r) {
+    const area = document.getElementById('reportArea');
+    area.innerHTML = '';
 
-    lastWorking  = workingMatch  ? workingMatch[1].trim()  : document.getElementById('working').value.trim();
-    lastBroken   = brokenMatch   ? brokenMatch[1].trim()   : document.getElementById('broken').value.trim();
-    lastCulprit  = culpritMatch  ? culpritMatch[1].trim()  : '';
-    lastFile     = fileMatch     ? fileMatch[1].trim()     : '';
+    const grid = document.createElement('div');
+    grid.className = 'report-grid';
+
+    // Commits analyzed
+    grid.appendChild(makeCard(
+      'Commits Analyzed (' + r.commits_analyzed.length + ')',
+      r.commits_analyzed.length === 0
+        ? 'none'
+        : r.commits_analyzed.map(c => c).join('\n'),
+      false
+    ));
+
+    // Files changed
+    grid.appendChild(makeCard(
+      'Files Changed (' + r.files_changed.length + ')',
+      r.files_changed.length === 0 ? 'none' : r.files_changed.join('\n'),
+      false
+    ));
+
+    // Failing tests
+    const testsCard = makeCard(
+      'Failing Tests (' + r.failing_tests.length + ')',
+      '', false
+    );
+    const testsVal = testsCard.querySelector('.card-value');
+    if (r.failing_tests.length === 0) {
+      const b = badge('All passing', 'badge-green');
+      testsVal.appendChild(b);
+    } else {
+      r.failing_tests.forEach(t => {
+        const b = badge(t, 'badge-red');
+        testsVal.appendChild(b);
+        testsVal.appendChild(document.createTextNode(' '));
+      });
+    }
+    grid.appendChild(testsCard);
+
+    // Suspected commit
+    grid.appendChild(makeCard('Suspected Commit', r.suspected_commit, false));
+
+    // Suspected file — full width
+    const fileCard = makeCard('Suspected File', r.suspected_file, true);
+    grid.appendChild(fileCard);
+
+    area.appendChild(grid);
+  }
+
+  function renderFixChanges(fr) {
+    const container = document.getElementById('fixChanges');
+    container.innerHTML = '';
+
+    fr.changes.forEach(ch => {
+      const row = document.createElement('div');
+      row.className = 'fix-change-row';
+
+      const fname = document.createElement('span');
+      fname.className = 'file-name';
+      fname.textContent = ch.file;
+
+      const lines = document.createElement('span');
+      lines.className = 'lines';
+      lines.textContent = ch.lines ? '\u2022 ' + ch.lines : '';
+
+      const summary = document.createElement('span');
+      summary.textContent = ch.summary;
+
+      row.appendChild(fname);
+      row.appendChild(lines);
+      row.appendChild(summary);
+      container.appendChild(row);
+    });
+
+    document.getElementById('fixPytest').textContent = fr.pytest_output || '';
+  }
+
+  function makeCard(labelText, valueText, fullWidth) {
+    const card = document.createElement('div');
+    card.className = 'card' + (fullWidth ? ' full-width' : '');
+
+    const label = document.createElement('div');
+    label.className = 'card-label';
+    label.textContent = labelText;
+
+    const value = document.createElement('div');
+    value.className = 'card-value';
+    value.textContent = valueText;
+
+    card.appendChild(label);
+    card.appendChild(value);
+    return card;
+  }
+
+  function badge(text, cls) {
+    const b = document.createElement('span');
+    b.className = 'badge ' + cls;
+    b.textContent = text;
+    return b;
   }
 
   function showFixSection() {
@@ -373,12 +538,6 @@ function getWebviewContent(): string {
     el.style.color = isError
       ? 'var(--vscode-errorForeground, #f48771)'
       : 'var(--vscode-descriptionForeground)';
-  }
-
-  function setOutput(text, isError) {
-    const el = document.getElementById('output');
-    el.textContent = text;
-    el.className = 'output-block' + (isError ? ' error' : '');
   }
 </script>
 </body>
