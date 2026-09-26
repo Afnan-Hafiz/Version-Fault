@@ -9,7 +9,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const disposable = vscode.commands.registerCommand(
 		'versionFault.investigateRegression',
-		() => RegressionPanel.createOrShow(context.extensionUri, outputChannel)
+		() => {
+			outputChannel?.show(true);
+			outputChannel?.appendLine(`[${new Date().toISOString()}] Command 'versionFault.investigateRegression' executed.`);
+			RegressionPanel.createOrShow(context.extensionUri, outputChannel);
+		}
 	);
 	context.subscriptions.push(disposable);
 }

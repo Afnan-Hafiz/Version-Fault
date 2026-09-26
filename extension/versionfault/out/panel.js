@@ -59,8 +59,14 @@ class RegressionPanel {
         this._log(`RegressionPanel: HTML set. cwd=${this._cwd}, error=${res.error}`);
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
         this._panel.webview.onDidReceiveMessage(async (message) => {
-            this._log(`[Webview->Host] command=${message.command}`);
+            this._log(`[Webview->Host] command=${message.command}${message.text ? ` (${message.text})` : ''}`);
             switch (message.command) {
+                case 'webviewReady':
+                    this._log('[Webview] UI script loaded and running successfully.');
+                    break;
+                case 'webviewError':
+                    this._log(`[Webview ERROR] ${message.text}`);
+                    break;
                 case 'investigate':
                     await this._runAnalyzer(message.working ?? '', message.broken ?? '');
                     break;
@@ -77,9 +83,11 @@ class RegressionPanel {
     static createOrShow(extensionUri, outputChannel) {
         const column = vscode.window.activeTextEditor?.viewColumn;
         if (RegressionPanel.current) {
+            outputChannel?.appendLine(`[${new Date().toISOString()}] RegressionPanel already open, revealing tab.`);
             RegressionPanel.current._panel.reveal(column);
             return;
         }
+        outputChannel?.appendLine(`[${new Date().toISOString()}] Creating new RegressionPanel webview.`);
         const panel = vscode.window.createWebviewPanel('versionFault', 'Version Fault', column ?? vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
@@ -530,7 +538,32 @@ function buildWebviewHtml(nonce, initialPath, initialError) {
 (function () {
   var PATH_OK = ${pathOk};
 
-  var vscode = acquireVsCodeApi();
+  var vscode;
+  try {
+    vscode = acquireVsCodeApi();
+  } catch (err) {
+    console.error('[Webview] acquireVsCodeApi failed:', err);
+  }
+
+  // Catch any unhandled errors in webview and forward to extension host
+  window.onerror = function (msg, source, lineno, colno) {
+    try {
+      if (vscode) {
+        vscode.postMessage({
+          command: 'webviewError',
+          text: msg + ' (' + (source || 'script') + ':' + lineno + ':' + colno + ')'
+        });
+      }
+    } catch (_) {}
+    return false;
+  };
+
+  // Signal immediately to extension host that webview JS loaded
+  try {
+    if (vscode) {
+      vscode.postMessage({ command: 'webviewReady' });
+    }
+  } catch (_) {}
 
   var lastWorking = '';
   var lastBroken  = '';
