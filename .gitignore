@@ -1,1 +1,18 @@
-﻿.venv/
+.venv/
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# VS Code / IBM Bob
+.vscode/
+
+# Extension packages
+*.vsix
+
+# OS
+.DS_Store
