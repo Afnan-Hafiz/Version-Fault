@@ -1,7 +1,7 @@
 {
   "name": "versionfault",
-  "displayName": "Version Fault",
-  "description": "Investigate regressions between release versions.",
+  "displayName": "VersionFault",
+  "description": "",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.80.0"
@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "versionFault.investigateRegression",
-        "title": "Version Fault: Investigate Regression"
+        "command": "versionfault.helloWorld",
+        "title": "Hello World"
       }
     ]
   },
