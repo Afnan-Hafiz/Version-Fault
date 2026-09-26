@@ -5,7 +5,13 @@ import os
 
 # --- Argument validation ---
 if len(sys.argv) < 3:
-    print("Usage: python git_analyzer.py <working_tag> <broken_tag>", file=sys.stderr)
+    print(
+        "Error: two arguments are required.\n"
+        "Usage: python git_analyzer.py <working_tag> <broken_tag>\n"
+        "  working_tag  – the last known-good tag  (e.g. v1.0)\n"
+        "  broken_tag   – the tag that introduced the regression (e.g. v2.0)",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 # These are the two versions we're comparing
@@ -26,6 +32,22 @@ def run_git(*args):
     return result.stdout
 
 
+def validate_tag(tag):
+    """Exit with a human-readable message if *tag* does not exist in the repo."""
+    check = subprocess.run(
+        ["git", "rev-parse", "--verify", tag],
+        capture_output=True,
+        text=True,
+    )
+    if check.returncode != 0:
+        print(
+            f"Error: tag \"{tag}\" was not found in this repository.\n"
+            "       Run `git tag` to list all available tags.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def split_lines(output):
     """Split newline-separated output into a list, returning [] when output is empty."""
     stripped = output.strip()
@@ -35,8 +57,8 @@ def split_lines(output):
 
 
 # --- Validate that both tags actually exist ---
-run_git("rev-parse", "--verify", working_tag)
-run_git("rev-parse", "--verify", broken_tag)
+validate_tag(working_tag)
+validate_tag(broken_tag)
 
 # 1. Get list of commits between the two versions
 commits = split_lines(run_git("log", f"{working_tag}..{broken_tag}", "--oneline"))
