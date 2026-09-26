@@ -40,7 +40,7 @@ cd extension/versionfault && npm test              # vscode-test (requires VS Co
 - No formatter config (black/ruff/flake8 not present); follow PEP 8
 - Functions use `snake_case`; no type annotations in existing code
 - Docstrings use simple inline format: `"""items: list of (price, quantity) tuples"""`
-- `apply_discount` takes `discount_percent` as a raw fraction of subtotal (NOT a /100 value) — e.g. `10` means subtract `subtotal * 10`, not `subtotal * 0.1`. Verify this when modifying discount logic.
+- `apply_discount` divides `discount_percent` by 100 (e.g. `10` means subtract 10%, i.e. `subtotal * 0.1`). A past regression (fixed in `demo_project/invoice.py`) dropped this division — if you see `subtotal * discount_percent` with no `/ 100`, that is the bug, not the spec.
 
 ### TypeScript (extension)
 - `strict: true` in tsconfig; target ES2022, module Node16
