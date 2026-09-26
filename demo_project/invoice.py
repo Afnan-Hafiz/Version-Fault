@@ -1,10 +1,10 @@
-﻿def calculate_subtotal(items):
+def calculate_subtotal(items):
     """items: list of (price, quantity) tuples"""
     return sum(price * quantity for price, quantity in items)
 
 
 def apply_discount(subtotal, discount_percent):
-    return subtotal - (subtotal * discount_percent)
+    return subtotal - (subtotal * discount_percent / 100)
 
 
 def calculate_tax(amount, tax_rate):
