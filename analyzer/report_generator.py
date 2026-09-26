@@ -18,7 +18,7 @@ def main():
     working = sys.argv[1]
     broken  = sys.argv[2]
 
-    print(f"Version Fault — Regression Report")
+    print(f"Version Fault - Regression Report")
     print(f"Working release : {working}")
     print(f"Broken release  : {broken}")
     print()
@@ -27,7 +27,7 @@ def main():
     print("Files changed    : 6")
     print("Failing tests    : 1")
     print()
-    print("Suspected culprit commit: abc1234 — \"Refactor payment module\"")
+    print("Suspected culprit commit: abc1234 - \"Refactor payment module\"")
     print("Introduced in   : src/payment/processor.py")
     print()
     print("[!] Replace this script with the real analyzer when ready.")
