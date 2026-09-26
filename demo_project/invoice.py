@@ -1,4 +1,4 @@
-def calculate_subtotal(items):
+﻿def calculate_subtotal(items):
     """items: list of (price, quantity) tuples"""
     return sum(price * quantity for price, quantity in items)
 

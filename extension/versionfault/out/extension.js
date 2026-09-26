@@ -37,8 +37,11 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const panel_1 = require("./panel");
+let outputChannel;
 function activate(context) {
-    const disposable = vscode.commands.registerCommand('versionFault.investigateRegression', () => panel_1.RegressionPanel.createOrShow(context.extensionUri));
+    outputChannel = vscode.window.createOutputChannel('Version Fault');
+    context.subscriptions.push(outputChannel);
+    const disposable = vscode.commands.registerCommand('versionFault.investigateRegression', () => panel_1.RegressionPanel.createOrShow(context.extensionUri, outputChannel));
     context.subscriptions.push(disposable);
 }
 function deactivate() { }
