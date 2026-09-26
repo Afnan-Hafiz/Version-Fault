@@ -1,0 +1,11 @@
+{
+  "working_tag": "v1.0",
+  "broken_tag": "v2.0",
+  "commits": [
+    "8deb5db demo_project: apply_discount drops percentage division (regression)"
+  ],
+  "changed_files": [
+    "demo_project/invoice.py"
+  ],
+  "diff": "diff --git a/demo_project/invoice.py b/demo_project/invoice.py\nindex 1b39e4d..ec016da 100644\n--- a/demo_project/invoice.py\n+++ b/demo_project/invoice.py\n@@ -4,7 +4,7 @@ def calculate_subtotal(items):\n \n \n def apply_discount(subtotal, discount_percent):\n-    return subtotal - (subtotal * discount_percent / 100)\n+    return subtotal - (subtotal * discount_percent)\n \n \n def calculate_tax(amount, tax_rate):\n"
+}
