@@ -119,8 +119,16 @@ def main():
 
     commits       = get_commits(args.working, args.broken, workspace)
     changed_files = get_changed_files(args.working, args.broken, workspace)
+    # Ensure target release state is checked out for demo_project to test accurately
+    run_git(["checkout", args.broken, "--", "demo_project"], workspace)
+
     failing_tests = run_pytest(workspace)
-    suspected_commit, suspected_file = suspect_from(commits, changed_files)
+
+    if failing_tests:
+        suspected_commit, suspected_file = suspect_from(commits, changed_files)
+    else:
+        suspected_commit = "None (No regression detected)"
+        suspected_file   = "None"
 
     report = {
         "working_release":  args.working,
@@ -130,6 +138,7 @@ def main():
         "failing_tests":    failing_tests,
         "suspected_commit": suspected_commit,
         "suspected_file":   suspected_file,
+        "has_bug":          len(failing_tests) > 0,
     }
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
