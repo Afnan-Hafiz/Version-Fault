@@ -270,7 +270,7 @@ The panel shows the commit and file suspected of causing the regression, the fai
 
 **After Bob applies the fix — verified:**
 
-![Fix applied and verified]([screenshots/fix_applied_verified.webp](https://github.com/Afnan-Hafiz/Version-Fault/blob/17cbb0e137ae38939cc3534fcae4c6a99282f902/screenshot1.webp))
+![Fix applied and verified]
 
 https://github.com/Afnan-Hafiz/Version-Fault/blob/17cbb0e137ae38939cc3534fcae4c6a99282f902/screenshot2.webp
 
