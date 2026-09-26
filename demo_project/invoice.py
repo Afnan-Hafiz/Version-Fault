@@ -4,7 +4,7 @@ def calculate_subtotal(items):
 
 
 def apply_discount(subtotal, discount_percent):
-    return subtotal - (subtotal * discount_percent)
+    return subtotal - (subtotal * discount_percent / 100)
 
 
 def calculate_tax(amount, tax_rate):
