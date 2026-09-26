@@ -262,9 +262,17 @@ Regression triage is among the most common and cognitively expensive tasks in so
 
 ## Screenshots
 
-Screenshots of the extension panel and a sample IBM Bob investigation/fix session:
+**Investigate Regression — evidence gathered:**
 
-*(Add screenshots or a short GIF here — e.g. the panel before/after clicking Investigate Regression, and a Bob task result showing the root-cause explanation.)*
+![Investigate Regression result](screenshots/investigate_regression_result.webp)
+
+The panel shows the commit and file suspected of causing the regression, the failing test with its assertion error, and offers a **Fix The Issue** action.
+
+**After Bob applies the fix — verified:**
+
+![Fix applied and verified](screenshots/fix_applied_verified.webp)
+
+Bob reverts the regression-causing change in `demo_project/invoice.py`, re-runs the full test suite, and confirms all 7 tests pass.
 
 ---
 
