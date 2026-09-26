@@ -38,7 +38,6 @@ const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const fs_1 = require("fs");
 const child_process_1 = require("child_process");
-const crypto_1 = require("crypto");
 class RegressionPanel {
     _extensionUri;
     static current;
@@ -54,9 +53,8 @@ class RegressionPanel {
         // Resolve path ONCE at creation so it's stable for the whole session
         const res = this._resolveWorkspaceRoot();
         this._cwd = res.path;
-        const nonce = (0, crypto_1.randomBytes)(16).toString('hex');
         const cspSource = this._panel.webview.cspSource;
-        this._panel.webview.html = buildWebviewHtml(nonce, cspSource, res.path, res.error);
+        this._panel.webview.html = buildWebviewHtml(cspSource, res.path, res.error);
         this._log(`RegressionPanel: HTML set. cwd=${this._cwd}, error=${res.error}`);
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
         this._panel.webview.onDidReceiveMessage(async (message) => {
@@ -212,10 +210,14 @@ class RegressionPanel {
     }
     // ── Python process ───────────────────────────────────────────────────────────
     _spawnPy(scriptPath, args, cwd, timeoutMs, onDone) {
-        this._log(`[Py] spawn: python ${path.basename(scriptPath)} ${args.join(' ')}`);
+        const venvPython = process.platform === 'win32'
+            ? path.join(cwd, '.venv', 'Scripts', 'python.exe')
+            : path.join(cwd, '.venv', 'bin', 'python');
+        const pythonCommand = (0, fs_1.existsSync)(venvPython) ? venvPython : 'python';
+        this._log(`[Py] spawn: ${pythonCommand} ${path.basename(scriptPath)} ${args.join(' ')}`);
         let proc;
         try {
-            proc = (0, child_process_1.spawn)('python', [scriptPath, ...args], {
+            proc = (0, child_process_1.spawn)(pythonCommand, [scriptPath, ...args], {
                 cwd,
                 env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
             });
@@ -355,7 +357,7 @@ class RegressionPanel {
 }
 exports.RegressionPanel = RegressionPanel;
 // ── Webview HTML ─────────────────────────────────────────────────────────────
-function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
+function buildWebviewHtml(cspSource, initialPath, initialError) {
     const pathText = initialError
         ? '\u26A0\uFE0F ' + escHtml(initialError)
         : initialPath
@@ -369,7 +371,7 @@ function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src 'unsafe-inline' 'unsafe-eval' ${cspSource} 'nonce-${nonce}'; style-src 'unsafe-inline' ${cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src 'unsafe-inline' 'unsafe-eval' ${cspSource}; style-src 'unsafe-inline' ${cspSource};">
 <title>Version Fault</title>
 <style>
   body {
@@ -548,14 +550,14 @@ function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
 <label for="broken">Broken release</label>
 <input type="text" id="broken" placeholder="e.g. v2.0 or commit SHA" value="8deb5db" />
 
-<button id="runBtn" onclick="runInvestigation()">Investigate Regression</button>
+<button id="runBtn">Investigate Regression</button>
 <div id="pathInfo"${pathCls}>${pathText}</div>
 <div class="status" id="status"></div>
 <div id="reportArea"></div>
 
 <div id="fixSection">
   <hr class="section-divider">
-  <button id="fixBtn" onclick="runFix()">Fix The Issue</button>
+  <button id="fixBtn">Fix The Issue</button>
   <div class="status" id="fixStatus"></div>
   <div id="successBanner">&#10003; ALL ISSUES ARE FIXED NOW!</div>
   <div id="fixSection-changes" style="display:none">
@@ -566,7 +568,7 @@ function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
   </div>
 </div>
 
-<script nonce="${nonce}">
+<script>
 (function () {
   var PATH_OK = ${pathOk};
 
@@ -602,25 +604,26 @@ function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
   var lastCulprit = '';
   var lastFile    = '';
 
-  window.runInvestigation = runInvestigation;
-  window.runFix = runFix;
-
+  // This script is at the end of the body, so the controls already exist.
+  // Bind once; registering on DOMContentLoaded as well caused duplicate runs.
   var runBtn = document.getElementById('runBtn');
-  if (runBtn) { runBtn.onclick = runInvestigation; }
+  if (runBtn) { runBtn.addEventListener('click', runInvestigation); }
   var fixBtn = document.getElementById('fixBtn');
-  if (fixBtn) { fixBtn.onclick = runFix; }
+  if (fixBtn) { fixBtn.addEventListener('click', runFix); }
 
   window.addEventListener('message', function (event) {
     var msg = event.data;
 
     if (msg.type === 'loading') {
+      document.getElementById('runBtn').disabled = true;
       setStatus('Running analysis\u2026', false);
       document.getElementById('reportArea').innerHTML = '';
+      hideFixSection();
 
     } else if (msg.type === 'result') {
       document.getElementById('runBtn').disabled = false;
       var hasBugs = msg.report.has_bug || (msg.report.failing_tests && msg.report.failing_tests.length > 0);
-      setStatus(hasBugs ? 'Analysis complete — Regression detected.' : 'Analysis complete — No bugs detected.', false);
+      setStatus(hasBugs ? 'Analysis complete \u2014 Regression detected.' : 'Analysis complete \u2014 No bugs detected.', false);
       renderReport(msg.report);
       lastWorking = msg.report.working_release  || '';
       lastBroken  = msg.report.broken_release   || '';
@@ -641,6 +644,9 @@ function buildWebviewHtml(nonce, cspSource, initialPath, initialError) {
       document.getElementById('reportArea').innerHTML = '';
       document.getElementById('reportArea').appendChild(el);
       hideFixSection();
+
+    } else if (msg.type === 'fixLoading') {
+      setFixStatus('Running fix script\u2026', false);
 
     } else if (msg.type === 'fixResult') {
       resetFixButton();
