@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { existsSync } from 'fs';
 import { spawn } from 'child_process';
 
 export class RegressionPanel {
@@ -15,9 +16,17 @@ export class RegressionPanel {
 		this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
 		this._panel.webview.onDidReceiveMessage(
-			(message: { command: string; working: string; broken: string }) => {
+			(message: {
+				command: string;
+				working: string;
+				broken: string;
+				culprit: string;
+				file: string;
+			}) => {
 				if (message.command === 'investigate') {
 					this._runAnalyzer(message.working, message.broken);
+				} else if (message.command === 'fix') {
+					this._runFix(message.working, message.broken, message.culprit, message.file);
 				}
 			},
 			null,
@@ -45,35 +54,48 @@ export class RegressionPanel {
 		RegressionPanel.current = new RegressionPanel(panel, extensionUri);
 	}
 
-	private _runAnalyzer(working: string, broken: string): void {
-		// Resolve the script relative to the workspace root.
-		// The extension lives at <workspace>/extension/versionfault, so the
-		// analyzer is two levels up from the extension root.
+	private _resolveWorkspaceRoot(): string {
 		const workspaceFolders = vscode.workspace.workspaceFolders;
-		const workspaceRoot = workspaceFolders
+		const candidate = workspaceFolders
 			? workspaceFolders[0].uri.fsPath
 			: path.resolve(this._extensionUri.fsPath, '..', '..');
+		return existsSync(path.join(candidate, 'analyzer', 'report_generator.py'))
+			? candidate
+			: path.resolve(this._extensionUri.fsPath, '..', '..');
+	}
 
-		const scriptPath = path.join(workspaceRoot, 'analyzer', 'report_generator.py');
-
-		this._panel.webview.postMessage({ type: 'loading' });
-
-		const proc = spawn('python', [scriptPath, working, broken], {
+	private _spawnPython(
+		scriptPath: string,
+		args: string[],
+		workspaceRoot: string,
+		onDone: (code: number | null, stdout: string, stderr: string) => void
+	): void {
+		const proc = spawn('python', [scriptPath, ...args], {
 			cwd: workspaceRoot,
+			env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
 		});
 
 		let stdout = '';
 		let stderr = '';
 
-		proc.stdout.on('data', (chunk: Buffer) => {
-			stdout += chunk.toString();
-		});
+		proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+		proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
-		proc.stderr.on('data', (chunk: Buffer) => {
-			stderr += chunk.toString();
-		});
+		proc.on('close', (code) => onDone(code, stdout, stderr));
 
-		proc.on('close', (code: number | null) => {
+		proc.on('error', (err: Error) => {
+			// Treat a spawn error as a non-zero exit with a meaningful message.
+			onDone(-1, '', `Failed to start Python: ${err.message}`);
+		});
+	}
+
+	private _runAnalyzer(working: string, broken: string): void {
+		const workspaceRoot = this._resolveWorkspaceRoot();
+		const scriptPath = path.join(workspaceRoot, 'analyzer', 'report_generator.py');
+
+		this._panel.webview.postMessage({ type: 'loading' });
+
+		this._spawnPython(scriptPath, [working, broken], workspaceRoot, (code, stdout, stderr) => {
 			if (code === 0) {
 				this._panel.webview.postMessage({ type: 'result', output: stdout });
 			} else {
@@ -81,12 +103,21 @@ export class RegressionPanel {
 				this._panel.webview.postMessage({ type: 'error', output: errMsg });
 			}
 		});
+	}
 
-		proc.on('error', (err: Error) => {
-			this._panel.webview.postMessage({
-				type: 'error',
-				output: `Failed to start Python: ${err.message}`,
-			});
+	private _runFix(working: string, broken: string, culprit: string, file: string): void {
+		const workspaceRoot = this._resolveWorkspaceRoot();
+		const scriptPath = path.join(workspaceRoot, 'analyzer', 'fix_issue.py');
+
+		this._panel.webview.postMessage({ type: 'fixLoading' });
+
+		this._spawnPython(scriptPath, [working, broken, culprit, file], workspaceRoot, (code, stdout, stderr) => {
+			if (code === 0) {
+				this._panel.webview.postMessage({ type: 'fixResult', output: stdout });
+			} else {
+				const errMsg = stderr.trim() || `Process exited with code ${code}.`;
+				this._panel.webview.postMessage({ type: 'fixError', output: errMsg });
+			}
 		});
 	}
 
@@ -117,6 +148,7 @@ function getWebviewContent(): string {
     max-width: 640px;
   }
   h2 { margin-top: 0; }
+  h3 { margin: 18px 0 6px; }
   label { display: block; margin-bottom: 4px; font-weight: bold; }
   input[type="text"] {
     width: 100%;
@@ -140,13 +172,13 @@ function getWebviewContent(): string {
   }
   button:hover { background: var(--vscode-button-hoverBackground); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #status {
+  .status {
     margin-top: 8px;
     font-style: italic;
     color: var(--vscode-descriptionForeground);
     min-height: 18px;
   }
-  #output {
+  .output-block {
     margin-top: 14px;
     padding: 10px;
     white-space: pre-wrap;
@@ -158,7 +190,26 @@ function getWebviewContent(): string {
     min-height: 80px;
     color: var(--vscode-foreground);
   }
-  #output.error { color: var(--vscode-errorForeground, #f48771); }
+  .output-block.error { color: var(--vscode-errorForeground, #f48771); }
+  /* Fix section — hidden until a report is ready */
+  #fixSection { display: none; margin-top: 20px; }
+  /* Success banner */
+  #successBanner {
+    display: none;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--vscode-testing-iconPassed, #388a34);
+    color: #fff;
+    font-weight: bold;
+    font-size: 1.05em;
+    border-radius: 2px;
+  }
+  /* Separator between the two main sections */
+  .section-divider {
+    margin: 22px 0 18px;
+    border: none;
+    border-top: 1px solid var(--vscode-input-border, #444);
+  }
 </style>
 </head>
 <body>
@@ -171,11 +222,31 @@ function getWebviewContent(): string {
 <input type="text" id="broken" placeholder="e.g. v2.0" />
 
 <button id="runBtn" onclick="runInvestigation()">Investigate Regression</button>
-<div id="status"></div>
-<div id="output"></div>
+<div class="status" id="status"></div>
+<div class="output-block" id="output"></div>
+
+<!-- Fix section: revealed after a successful investigation -->
+<div id="fixSection">
+  <hr class="section-divider">
+  <button id="fixBtn" onclick="runFix()">Fix The Issue</button>
+  <div class="status" id="fixStatus"></div>
+  <div id="successBanner">&#10003; ALL ISSUES ARE FIXED NOW!</div>
+  <div id="fixSection-changes" style="display:none">
+    <h3>Changes Applied</h3>
+    <div class="output-block" id="fixOutput"></div>
+  </div>
+</div>
 
 <script>
   const vscode = acquireVsCodeApi();
+
+  // Parsed from the last successful investigation report.
+  let lastWorking  = '';
+  let lastBroken   = '';
+  let lastCulprit  = '';
+  let lastFile     = '';
+
+  // ── Investigate ────────────────────────────────────────────────────────────
 
   function runInvestigation() {
     const working = document.getElementById('working').value.trim();
@@ -187,27 +258,106 @@ function getWebviewContent(): string {
     }
 
     document.getElementById('runBtn').disabled = true;
-    setStatus('Running analysis…', false);
+    setStatus('Running analysis\u2026', false);
     setOutput('', false);
+    hideFixSection();
 
     vscode.postMessage({ command: 'investigate', working, broken });
   }
 
+  // ── Fix ────────────────────────────────────────────────────────────────────
+
+  function runFix() {
+    document.getElementById('fixBtn').disabled = true;
+    document.getElementById('fixBtn').textContent = 'Fixing\u2026';
+    setFixStatus('Running fix script\u2026', false);
+    document.getElementById('successBanner').style.display = 'none';
+    document.getElementById('fixSection-changes').style.display = 'none';
+
+    vscode.postMessage({
+      command: 'fix',
+      working:  lastWorking,
+      broken:   lastBroken,
+      culprit:  lastCulprit,
+      file:     lastFile,
+    });
+  }
+
+  // ── Message handler ────────────────────────────────────────────────────────
+
   window.addEventListener('message', event => {
     const msg = event.data;
-    document.getElementById('runBtn').disabled = false;
 
+    // -- Investigation messages --
     if (msg.type === 'loading') {
-      setStatus('Running analysis…', false);
+      setStatus('Running analysis\u2026', false);
       setOutput('', false);
+
     } else if (msg.type === 'result') {
+      document.getElementById('runBtn').disabled = false;
       setStatus('Done.', false);
       setOutput(msg.output, false);
+      // Parse culprit info and reveal the Fix button.
+      parseReport(msg.output);
+      showFixSection();
+
     } else if (msg.type === 'error') {
+      document.getElementById('runBtn').disabled = false;
       setStatus('Error.', false);
       setOutput(msg.output, true);
+      hideFixSection();
+
+    // -- Fix messages --
+    } else if (msg.type === 'fixLoading') {
+      // button already disabled in runFix()
+
+    } else if (msg.type === 'fixResult') {
+      resetFixButton();
+      setFixStatus('', false);
+      document.getElementById('successBanner').style.display = 'block';
+      document.getElementById('fixOutput').textContent = msg.output;
+      document.getElementById('fixSection-changes').style.display = 'block';
+
+    } else if (msg.type === 'fixError') {
+      resetFixButton();
+      setFixStatus('Fix failed: ' + msg.output, true);
+      document.getElementById('successBanner').style.display = 'none';
     }
   });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function parseReport(text) {
+    // Extract the working/broken releases echoed in the report.
+    const workingMatch = text.match(/Working release\s*:\s*(.+)/i);
+    const brokenMatch  = text.match(/Broken release\s*:\s*(.+)/i);
+    const culpritMatch = text.match(/Suspected culprit commit:\s*(.+)/i);
+    const fileMatch    = text.match(/Introduced in\s*:\s*(.+)/i);
+
+    lastWorking  = workingMatch  ? workingMatch[1].trim()  : document.getElementById('working').value.trim();
+    lastBroken   = brokenMatch   ? brokenMatch[1].trim()   : document.getElementById('broken').value.trim();
+    lastCulprit  = culpritMatch  ? culpritMatch[1].trim()  : '';
+    lastFile     = fileMatch     ? fileMatch[1].trim()     : '';
+  }
+
+  function showFixSection() {
+    const sec = document.getElementById('fixSection');
+    sec.style.display = 'block';
+    resetFixButton();
+    document.getElementById('successBanner').style.display = 'none';
+    document.getElementById('fixSection-changes').style.display = 'none';
+    setFixStatus('', false);
+  }
+
+  function hideFixSection() {
+    document.getElementById('fixSection').style.display = 'none';
+  }
+
+  function resetFixButton() {
+    const btn = document.getElementById('fixBtn');
+    btn.disabled = false;
+    btn.textContent = 'Fix The Issue';
+  }
 
   function setStatus(text, isError) {
     const el = document.getElementById('status');
@@ -217,10 +367,18 @@ function getWebviewContent(): string {
       : 'var(--vscode-descriptionForeground)';
   }
 
+  function setFixStatus(text, isError) {
+    const el = document.getElementById('fixStatus');
+    el.textContent = text;
+    el.style.color = isError
+      ? 'var(--vscode-errorForeground, #f48771)'
+      : 'var(--vscode-descriptionForeground)';
+  }
+
   function setOutput(text, isError) {
     const el = document.getElementById('output');
     el.textContent = text;
-    el.className = isError ? 'error' : '';
+    el.className = 'output-block' + (isError ? ' error' : '');
   }
 </script>
 </body>
