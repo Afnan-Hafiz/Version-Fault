@@ -26,7 +26,8 @@ export class RegressionPanel {
 		this._cwd = res.path;
 
 		const nonce = randomBytes(16).toString('hex');
-		this._panel.webview.html = buildWebviewHtml(nonce, res.path, res.error);
+		const cspSource = this._panel.webview.cspSource;
+		this._panel.webview.html = buildWebviewHtml(nonce, cspSource, res.path, res.error);
 		this._log(`RegressionPanel: HTML set. cwd=${this._cwd}, error=${res.error}`);
 
 		this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -370,7 +371,7 @@ export class RegressionPanel {
 
 // ── Webview HTML ─────────────────────────────────────────────────────────────
 
-function buildWebviewHtml(nonce: string, initialPath: string | undefined, initialError: string | undefined): string {
+function buildWebviewHtml(nonce: string, cspSource: string, initialPath: string | undefined, initialError: string | undefined): string {
 	const pathText = initialError
 		? '\u26A0\uFE0F ' + escHtml(initialError)
 		: initialPath
@@ -387,7 +388,7 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src 'unsafe-inline' 'unsafe-eval' ${cspSource} 'nonce-${nonce}'; style-src 'unsafe-inline' ${cspSource};">
 <title>Version Fault</title>
 <style>
   body {
@@ -479,6 +480,37 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
     color: var(--vscode-foreground);
   }
   .output-block.error { color: var(--vscode-errorForeground, #f48771); }
+  .no-bug-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+    background: rgba(46, 160, 67, 0.15);
+    border: 1px solid #2ea043;
+    border-radius: 4px;
+    color: var(--vscode-foreground);
+  }
+  .no-bug-icon {
+    font-size: 2em;
+    color: #3fb950;
+    line-height: 1;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+  .no-bug-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #3fb950;
+    margin-bottom: 3px;
+  }
+  .no-bug-desc {
+    font-size: 0.92em;
+    color: var(--vscode-foreground);
+    opacity: 0.9;
+    line-height: 1.4;
+  }
   #fixSection { display: none; margin-top: 20px; }
   #successBanner {
     display: none;
@@ -535,14 +567,14 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
 <label for="broken">Broken release</label>
 <input type="text" id="broken" placeholder="e.g. v2.0 or commit SHA" value="8deb5db" />
 
-<button id="runBtn">Investigate Regression</button>
+<button id="runBtn" onclick="runInvestigation()">Investigate Regression</button>
 <div id="pathInfo"${pathCls}>${pathText}</div>
 <div class="status" id="status"></div>
 <div id="reportArea"></div>
 
 <div id="fixSection">
   <hr class="section-divider">
-  <button id="fixBtn">Fix The Issue</button>
+  <button id="fixBtn" onclick="runFix()">Fix The Issue</button>
   <div class="status" id="fixStatus"></div>
   <div id="successBanner">&#10003; ALL ISSUES ARE FIXED NOW!</div>
   <div id="fixSection-changes" style="display:none">
@@ -589,8 +621,13 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
   var lastCulprit = '';
   var lastFile    = '';
 
-  document.getElementById('runBtn').onclick = runInvestigation;
-  document.getElementById('fixBtn').onclick = runFix;
+  window.runInvestigation = runInvestigation;
+  window.runFix = runFix;
+
+  var runBtn = document.getElementById('runBtn');
+  if (runBtn) { runBtn.onclick = runInvestigation; }
+  var fixBtn = document.getElementById('fixBtn');
+  if (fixBtn) { fixBtn.onclick = runFix; }
 
   window.addEventListener('message', function (event) {
     var msg = event.data;
@@ -601,13 +638,18 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
 
     } else if (msg.type === 'result') {
       document.getElementById('runBtn').disabled = false;
-      setStatus('Analysis complete.', false);
+      var hasBugs = msg.report.has_bug || (msg.report.failing_tests && msg.report.failing_tests.length > 0);
+      setStatus(hasBugs ? 'Analysis complete — Regression detected.' : 'Analysis complete — No bugs detected.', false);
       renderReport(msg.report);
       lastWorking = msg.report.working_release  || '';
       lastBroken  = msg.report.broken_release   || '';
       lastCulprit = msg.report.suspected_commit || '';
       lastFile    = msg.report.suspected_file   || '';
-      showFixSection();
+      if (hasBugs) {
+        showFixSection();
+      } else {
+        hideFixSection();
+      }
 
     } else if (msg.type === 'error') {
       document.getElementById('runBtn').disabled = false;
@@ -678,6 +720,20 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
     var area = document.getElementById('reportArea');
     area.innerHTML = '';
 
+    var hasBugs = r.has_bug || (r.failing_tests && r.failing_tests.length > 0);
+
+    if (!hasBugs) {
+      var banner = document.createElement('div');
+      banner.className = 'no-bug-banner';
+      banner.innerHTML =
+        '<div class="no-bug-icon">&#10003;</div>' +
+        '<div class="no-bug-content">' +
+          '<div class="no-bug-title">No Bugs Detected!</div>' +
+          '<div class="no-bug-desc">All tests passed successfully between <code>' + esc(r.working_release) + '</code> and <code>' + esc(r.broken_release) + '</code>. No regressions or failing test cases were found.</div>' +
+        '</div>';
+      area.appendChild(banner);
+    }
+
     var grid = document.createElement('div');
     grid.className = 'report-grid';
 
@@ -708,6 +764,14 @@ function buildWebviewHtml(nonce: string, initialPath: string | undefined, initia
     grid.appendChild(makeCard('Suspected File',   r.suspected_file,   true));
 
     area.appendChild(grid);
+  }
+
+  function esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function renderFixChanges(fr) {
