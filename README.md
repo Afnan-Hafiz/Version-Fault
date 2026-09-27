@@ -1,4 +1,8 @@
-# Version Fault
+<p align="center">
+  <img src="./version-fault-logo.png" width="300" alt="Version Fault logo">
+</p>
+
+<h1 align="center">Version Fault</h1>
 
 > **Turn a broken release into a diagnosed, fixed, and verified one — automatically, inside your editor.**
 
