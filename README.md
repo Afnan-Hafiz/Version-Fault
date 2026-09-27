@@ -262,17 +262,18 @@ Regression triage is among the most common and cognitively expensive tasks in so
 
 ## Screenshots
 
+### Investigate Regression — evidence gathered
 
 The panel shows the commit and file suspected of causing the regression, the failing test with its assertion error, and offers a **Fix The Issue** action.
 
-**After Bob applies the fix — verified:**
+![Investigate Regression result](./screenshot2.webp)
 
-![Fix applied and verified]
+### After Bob applies the fix — verified
 
-https://github.com/Afnan-Hafiz/Version-Fault/blob/17cbb0e137ae38939cc3534fcae4c6a99282f902/screenshot2.webp
-https://github.com/Afnan-Hafiz/Version-Fault/blob/17cbb0e137ae38939cc3534fcae4c6a99282f902/screenshot1.webp
+![Fix applied and verified](./screenshot1.webp)
 
-Bob reverts the regression-causing change in `demo_project/invoice.py`, re-runs the full test suite, and confirms all 7 tests pass.
+Bob reverts the regression-causing change in `demo_project/invoice.py`, re-runs the full test suite, and confirms all **7 tests pass**.
+
 ---
 
 ## Hackathon Evidence
