@@ -255,12 +255,10 @@ Regression triage is among the most common and cognitively expensive tasks in so
 
 | Member | Responsibility | Output |
 |---|---|---|
-| Member 1 | IDE Extension Shell — command, panel, wiring to Python | `extension/versionfault/` |
-| Member 2 | Git Analyzer — commits, changed files, diffs between two tags | `analyzer/git_analyzer.py`, `git_analysis.json` |
-| Member 3 | Test Analyzer + Report Generator — runs pytest, captures failures, builds evidence report | `analyzer/pytest_analyzer.py`, `reports/regression_context.md` |
-| Member 4 | IBM Bob Workflow — investigation prompts, Agent-mode fix, verification, demo project | `analyzer/fix_issue.py`, `demo_project/`, Bob workflow |
-
-*(Replace with actual names before submission.)*
+| Ayesha Mashiat | IDE Extension Shell — command, panel, wiring to Python | `extension/versionfault/` |
+| Anushua Anadil | Git Analyzer — commits, changed files, diffs between two tags | `analyzer/git_analyzer.py`, `git_analysis.json` |
+| Eusha Kayenat | Test Analyzer + Report Generator — runs pytest, captures failures, builds evidence report | `analyzer/pytest_analyzer.py`, `reports/regression_context.md` |
+| Afnan Mohammad Hafiz | IBM Bob Workflow — investigation prompts, Agent-mode fix, verification, demo project | `analyzer/fix_issue.py`, `demo_project/`, Bob workflow |
 
 ---
 
